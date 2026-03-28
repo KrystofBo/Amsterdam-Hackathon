@@ -60,9 +60,25 @@ Always respond in this EXACT format:
 
 This prompt is embedded in `discord-bot/openclaw_client.py` as the `SYSTEM_PROMPT` constant. It gets sent as the `system` message in every `/v1/chat/completions` call to OpenClaw.
 
+## Project Context Injection
+
+At runtime, the bot appends a project isolation block to the system prompt:
+
+```
+## Project Context
+Project ID: <discord_channel_id>
+Project Name: <project_name>
+This is an isolated project session. Only consider ideas and
+feedback from this specific project. Do not reference or mix in
+context from any other project.
+```
+
+This ensures OpenClaw treats each Discord channel's project as a completely separate conversation.
+
 ## When Person A Has Separate Agents Ready
 
 Once Person A configures separate Synthesizer and Critic agents in OpenClaw:
 1. The system prompt in `openclaw_client.py` can be simplified or removed
 2. The `OPENCLAW_AGENT_ID` env var can be changed to point at a pipeline agent
 3. OpenClaw will handle the Synthesizer → Critic handoff internally
+4. The project context injection should be preserved regardless of prompt changes

@@ -128,3 +128,29 @@ We chose a **custom bot** instead because we need:
 - Channel-scoped team brain dump storage
 
 The native integration treats each message as a direct conversation turn, which doesn't fit our multi-user batch-and-synthesize workflow.
+
+## Project Isolation
+
+Each Discord channel is a separate project. To prevent OpenClaw's memory layer from mixing context between projects, every API request includes a project-scoped system prompt addition:
+
+```
+## Project Context
+Project ID: 1234567890
+Project Name: NASA Edu Game
+This is an isolated project session. Only consider ideas and
+feedback from this specific project. Do not reference or mix in
+context from any other project.
+```
+
+The project ID is the Discord channel ID (unique per channel). The project name is set via `!project <name>` or defaults to `project-<channel_id>`.
+
+User messages also include a `[Project: name]` prefix for additional clarity.
+
+## Health Check
+
+The `OpenClawClient.health_check()` method verifies connectivity:
+
+1. **Gateway reachable** — GET request to the base URL (5s timeout)
+2. **API responding** — Sends a minimal `POST /v1/chat/completions` with `max_tokens: 5`
+
+Returns a dict with `gateway_reachable`, `api_responding`, and `error` fields. Used by the `!health` Discord command.
