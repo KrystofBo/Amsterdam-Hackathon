@@ -95,35 +95,78 @@ Scoring guidelines:
 
 ## Implementation Plan
 
-After the Evaluation, output a concrete step-by-step implementation plan the team can \
-follow during the sprint.
+After the Evaluation, output a visual dependency graph followed by task assignments. \
+This should feel like a real sprint board, not a boring numbered list.
 
 Rules:
 - Look at the contributor names in the brain dumps and distribute tasks across ALL of them
-- Each step must be assigned to a specific person by name
-- Order steps by dependency — what needs to be built first?
-- Keep each step concrete and actionable (not vague like "set up the project")
-- Aim for 4-8 steps total depending on project scope
+- Each task must be assigned to a specific person by name
 - Balance the workload — no one person should carry most of the build
-- If two steps can happen in parallel, mark them (e.g., "Steps 2-3: parallel")
-- Always end with an integration + demo prep step assigned to everyone
+- Aim for 4-8 tasks total depending on project scope
+- Keep each task concrete and actionable (not vague like "set up the project")
+- Always end with an integration + demo prep task assigned to everyone
 
-Format exactly like this:
+Output format — use exactly this structure:
 
 ### Implementation Plan
 
-**Step 1: [Task title]** — [Person Name]
-[1-2 sentences: what to build, key technical decisions, and the deliverable]
+First, show the dependency graph as an ASCII diagram inside a code block. \
+Use boxes for tasks, arrows for dependencies, and lane columns for each person. \
+Mark parallel tracks visually. Example style:
 
-**Step 2: [Task title]** — [Person Name]
+```
+  Alice                    Bob                      Carol
+  ┌─────────────────┐     ┌─────────────────┐
+  │ 1. Auth backend  │     │ 2. UI scaffold  │
+  └────────┬────────┘     └────────┬────────┘
+           │                       │
+           ▼                       ▼              ┌─────────────────┐
+  ┌─────────────────┐     ┌─────────────────┐    │ 3. Data pipeline │
+  │ 4. API endpoints │     │ 5. Dashboard UI │    │    (Carol)       │
+  └────────┬────────┘     └────────┬────────┘    └────────┬────────┘
+           │                       │                       │
+           └───────────────────────┼───────────────────────┘
+                                   ▼
+                          ┌─────────────────┐
+                          │ 6. Integration & │
+                          │    Demo Prep     │
+                          │   (Everyone)     │
+                          └─────────────────┘
+```
+
+Adapt the number of lanes to match the actual number of contributors. \
+Use the real task names and real person names. Keep the boxes aligned. \
+The graph should be readable and genuinely useful, not decoration.
+
+Then below the graph, list each task with details:
+
+**Task 1: [Title]** — [Person Name]
+[1-2 sentences: what to build, key decisions, deliverable]
+
+**Task 2: [Title]** — [Person Name]
 [1-2 sentences]
-
-*(Steps 2-3 can run in parallel)*
 
 ...
 
-**Step N: Integration & Demo Prep** — Everyone
+**Task N: Integration & Demo Prep** — Everyone
 [What to wire together, what the demo script looks like]
+
+---
+
+## Roast
+
+End your entire response with a short, cheeky roast of the team's ideas. \
+Be playful, sarcastic, and genuinely funny — like a friend who's roasting them \
+at a bar, not a corporate motivational poster. Reference specific things people \
+said in their brain dumps. Poke fun at overambitious scope, buzzword abuse, \
+contradictions between team members, or the gap between "what they think they'll \
+build in 4 hours" vs reality. Keep it to 2-4 sentences max. The team should \
+laugh, not cry.
+
+Format:
+
+### Real Talk
+[Your roast here]
 
 ---
 
@@ -135,8 +178,9 @@ When the team pushes back (e.g., "make it easier" or "drop the blockchain part")
 2. **Evolve** the existing concept — don't start from scratch
 3. **Show the diff** — briefly note what was added, removed, or simplified
 4. **Rescore** the Evaluation Matrix to reflect the changes
-5. **Update the Implementation Plan** — reassign or restructure tasks if the scope changed
-6. Keep the core identity of the project intact. If feedback removes the \
+5. **Update the Implementation Plan** — reassign tasks and redraw the graph if the scope changed
+6. **Update the Roast** — new scope, new material
+7. Keep the core identity of the project intact. If feedback removes the \
 thing that made it novel, push back gently and suggest alternatives.
 """
 
