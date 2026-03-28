@@ -15,6 +15,8 @@ Commands:
 
 import os
 import sys
+import json
+import re
 import discord
 from discord.ext import commands
 from discord import ui
@@ -210,6 +212,130 @@ def split_message(text: str) -> list[str]:
         chunks.append(text[:split_at])
         text = text[split_at:].lstrip("\n")
     return chunks
+
+
+def parse_evaluation_json(text: str) -> dict | None:
+    """Extract the evaluation JSON block from the LLM response."""
+    # Look for ```json ... ``` block
+    match = re.search(r"```json\s*\n(.*?)\n```", text, re.DOTALL)
+    if not match:
+        # Try without the json tag
+        match = re.search(r"```\s*\n(\{.*?\})\n```", text, re.DOTALL)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None
+
+
+def strip_evaluation_json(text: str) -> str:
+    """Remove the evaluation JSON block and surrounding headers from the response."""
+    # Remove the ## 📊 Evaluation header and everything from there to the json block end
+    cleaned = re.sub(
+        r"##\s*📊\s*Evaluation.*?```json\s*\n.*?\n```",
+        "",
+        text,
+        flags=re.DOTALL,
+    )
+    # Clean up excessive blank lines
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    return cleaned
+
+
+def make_score_bar(score: int, max_score: int, length: int = 10) -> str:
+    """Create a visual progress bar for a score."""
+    filled = round(score / max_score * length)
+    empty = length - filled
+    bar = "▓" * filled + "░" * empty
+    return bar
+
+
+def make_evaluation_embed(data: dict) -> discord.Embed:
+    """Build a polished Discord embed from the evaluation JSON."""
+    embed = discord.Embed(
+        title="Evaluation Matrix",
+        color=0x2F3136,  # Dark neutral
+    )
+
+    # Novelty
+    n = data.get("novelty", {})
+    n_score, n_max = n.get("score", 0), n.get("max", 10)
+    embed.add_field(
+        name=f"Novelty  {n_score}/{n_max}",
+        value=f"`{make_score_bar(n_score, n_max)}`\n{n.get('reasoning', '')}",
+        inline=False,
+    )
+
+    # Technical Difficulty
+    d = data.get("difficulty", {})
+    d_score, d_max = d.get("score", 0), d.get("max", 10)
+    embed.add_field(
+        name=f"Technical Difficulty  {d_score}/{d_max}",
+        value=f"`{make_score_bar(d_score, d_max)}`\n{d.get('reasoning', '')}",
+        inline=False,
+    )
+
+    # Inclusivity
+    i = data.get("inclusivity", {})
+    i_score, i_max = i.get("score", 0), i.get("max", 100)
+    embed.add_field(
+        name=f"Inclusivity  {i_score}%",
+        value=f"`{make_score_bar(i_score, i_max)}`\n{i.get('reasoning', '')}",
+        inline=False,
+    )
+
+    # Demo Impact
+    di = data.get("demo_impact", {})
+    di_score, di_max = di.get("score", 0), di.get("max", 10)
+    embed.add_field(
+        name=f"Demo Impact  {di_score}/{di_max}",
+        value=f"`{make_score_bar(di_score, di_max)}`\n{di.get('reasoning', '')}",
+        inline=False,
+    )
+
+    # Biggest Risk
+    risk = data.get("biggest_risk", "")
+    if risk:
+        embed.add_field(
+            name="Biggest Risk",
+            value=risk,
+            inline=False,
+        )
+
+    # Quick Win
+    win = data.get("quick_win", "")
+    if win:
+        embed.add_field(
+            name="Quick Win",
+            value=win,
+            inline=False,
+        )
+
+    return embed
+
+
+async def send_synthesis_result(ctx, result: str):
+    """
+    Parse the LLM response. Send the concept as markdown and the
+    evaluation as a polished Discord embed.
+    """
+    eval_data = parse_evaluation_json(result)
+
+    if eval_data:
+        # Send the concept part (without the JSON block)
+        concept_text = strip_evaluation_json(result)
+        if concept_text:
+            for chunk in split_message(concept_text):
+                await ctx.send(chunk)
+
+        # Send the evaluation as a rich embed
+        embed = make_evaluation_embed(eval_data)
+        await ctx.send(embed=embed)
+    else:
+        # Fallback: if JSON parsing failed, send the whole thing as text
+        for chunk in split_message(result):
+            await ctx.send(chunk)
 
 
 def make_lobby_embed() -> discord.Embed:
@@ -423,8 +549,7 @@ async def synthesize(ctx):
             )
         store.add_conversation_turn(ctx.channel.id, "assistant", result)
 
-        for chunk in split_message(result):
-            await ctx.send(chunk)
+        await send_synthesis_result(ctx, result)
 
     except Exception as e:
         await ctx.send(f"Error connecting to OpenClaw: {e}")
@@ -464,8 +589,7 @@ async def feedback(ctx, *, text: str):
 
         store.add_conversation_turn(ctx.channel.id, "assistant", result)
 
-        for chunk in split_message(result):
-            await ctx.send(chunk)
+        await send_synthesis_result(ctx, result)
 
     except Exception as e:
         await ctx.send(f"Error connecting to OpenClaw: {e}")
