@@ -7,6 +7,7 @@ the iterative feedback loop.
 """
 
 import aiohttp
+import asyncio
 
 # System prompt that instructs OpenClaw's agent to act as both
 # Synthesizer and Critic. Person A will refine these prompts —
@@ -70,6 +71,57 @@ class OpenClawClient:
         self.token = token
         self.agent_id = agent_id
 
+    async def health_check(self) -> dict:
+        """
+        Check if OpenClaw gateway is reachable and responding.
+        Returns a dict with status info.
+        """
+        result = {
+            "gateway_url": self.base_url,
+            "agent_id": self.agent_id,
+            "gateway_reachable": False,
+            "api_responding": False,
+            "error": None,
+        }
+
+        try:
+            timeout = aiohttp.ClientTimeout(total=5)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                # Check if the gateway is reachable at all
+                async with session.get(self.base_url) as resp:
+                    result["gateway_reachable"] = True
+
+                # Check if the chat completions endpoint responds
+                headers = {
+                    "Authorization": f"Bearer {self.token}",
+                    "Content-Type": "application/json",
+                }
+                payload = {
+                    "model": f"openclaw:{self.agent_id}",
+                    "messages": [{"role": "user", "content": "ping"}],
+                    "max_tokens": 5,
+                    "stream": False,
+                }
+                async with session.post(
+                    f"{self.base_url}/v1/chat/completions",
+                    json=payload,
+                    headers=headers,
+                ) as resp:
+                    if resp.status == 200:
+                        result["api_responding"] = True
+                    else:
+                        error_text = await resp.text()
+                        result["error"] = f"API returned {resp.status}: {error_text[:200]}"
+
+        except asyncio.TimeoutError:
+            result["error"] = "Connection timed out (gateway not responding within 5s)"
+        except aiohttp.ClientConnectorError:
+            result["error"] = f"Cannot connect to {self.base_url} — is OpenClaw running?"
+        except Exception as e:
+            result["error"] = str(e)
+
+        return result
+
     async def synthesize(
         self,
         brain_dumps_text: str,
@@ -127,16 +179,27 @@ class OpenClawClient:
             "Content-Type": "application/json",
         }
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self.base_url}/v1/chat/completions",
-                json=payload,
-                headers=headers,
-            ) as resp:
-                if resp.status != 200:
-                    error_text = await resp.text()
-                    raise RuntimeError(
-                        f"OpenClaw returned {resp.status}: {error_text}"
-                    )
-                data = await resp.json()
-                return data["choices"][0]["message"]["content"]
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self.base_url}/v1/chat/completions",
+                    json=payload,
+                    headers=headers,
+                ) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        raise RuntimeError(
+                            f"OpenClaw returned {resp.status}: {error_text}"
+                        )
+                    data = await resp.json()
+                    return data["choices"][0]["message"]["content"]
+
+        except aiohttp.ClientConnectorError:
+            raise RuntimeError(
+                f"Cannot connect to OpenClaw at {self.base_url}. "
+                f"Make sure the gateway is running (`openclaw gateway`)."
+            )
+        except asyncio.TimeoutError:
+            raise RuntimeError(
+                "OpenClaw took too long to respond. The LLM might be overloaded."
+            )

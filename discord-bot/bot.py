@@ -245,6 +245,7 @@ async def help_cmd(ctx):
     embed.add_field(name="!status", value="See who's contributed and current state", inline=False)
     embed.add_field(name="!clear", value="Wipe all ideas and start fresh", inline=False)
     embed.add_field(name="!lobby", value="Post the lobby panel (create/join projects)", inline=False)
+    embed.add_field(name="!health", value="Check if OpenClaw is connected and responding", inline=False)
     await ctx.send(embed=embed)
 
 
@@ -426,6 +427,59 @@ async def clear(ctx):
     """Wipe all brain dumps and conversation history."""
     store.clear(ctx.channel.id)
     await ctx.send("All brain dumps and conversation history cleared. Fresh start!")
+
+
+@bot.command(name="health")
+async def health(ctx):
+    """Check if the OpenClaw gateway is connected and responding."""
+    msg = await ctx.send("Checking OpenClaw connection...")
+
+    result = await openclaw.health_check()
+
+    if result["gateway_reachable"] and result["api_responding"]:
+        embed = discord.Embed(
+            title="OpenClaw Health Check",
+            description="All systems operational!",
+            color=0x2ECC71,  # green
+        )
+        embed.add_field(name="Gateway", value=f"`{result['gateway_url']}`", inline=False)
+        embed.add_field(name="Agent", value=f"`{result['agent_id']}`", inline=True)
+        embed.add_field(name="Gateway Reachable", value="Yes", inline=True)
+        embed.add_field(name="API Responding", value="Yes", inline=True)
+    else:
+        embed = discord.Embed(
+            title="OpenClaw Health Check",
+            description="Connection issues detected",
+            color=0xE74C3C,  # red
+        )
+        embed.add_field(name="Gateway", value=f"`{result['gateway_url']}`", inline=False)
+        embed.add_field(name="Agent", value=f"`{result['agent_id']}`", inline=True)
+        embed.add_field(
+            name="Gateway Reachable",
+            value="Yes" if result["gateway_reachable"] else "No",
+            inline=True,
+        )
+        embed.add_field(
+            name="API Responding",
+            value="Yes" if result["api_responding"] else "No",
+            inline=True,
+        )
+        if result["error"]:
+            embed.add_field(name="Error", value=result["error"][:1024], inline=False)
+
+        # Helpful troubleshooting tips
+        tips = []
+        if not result["gateway_reachable"]:
+            tips.append("Make sure OpenClaw is running: `openclaw gateway`")
+            tips.append(f"Verify the URL in `.env`: `OPENCLAW_URL={result['gateway_url']}`")
+        elif not result["api_responding"]:
+            tips.append("Gateway is up but the agent isn't responding")
+            tips.append(f"Check that agent `{result['agent_id']}` exists: `openclaw agents list`")
+            tips.append("Verify `OPENCLAW_TOKEN` in `.env` is correct")
+        if tips:
+            embed.add_field(name="Troubleshooting", value="\n".join(f"• {t}" for t in tips), inline=False)
+
+    await msg.edit(content=None, embed=embed)
 
 
 if __name__ == "__main__":
