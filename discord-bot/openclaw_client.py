@@ -66,10 +66,36 @@ Show what changed.
 
 
 class OpenClawClient:
-    def __init__(self, base_url: str, token: str, agent_id: str):
+    def __init__(
+        self,
+        base_url: str,
+        token: str,
+        agent_id: str,
+        chat_model: str | None = None,
+    ):
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.agent_id = agent_id
+        self.chat_model = (chat_model or f"openclaw:{agent_id}").strip()
+
+    def _expected_model_ids(self) -> set[str]:
+        """Return model ids that should appear in `/v1/models`."""
+        expected = {self.chat_model}
+
+        if self.chat_model.startswith("openclaw:"):
+            alias = self.chat_model.split(":", 1)[1]
+            expected.add(f"openclaw/{alias}")
+        elif self.chat_model.startswith("openclaw/"):
+            alias = self.chat_model.split("/", 1)[1]
+            expected.add(f"openclaw:{alias}")
+
+        if self.agent_id:
+            expected.update({
+                f"openclaw/{self.agent_id}",
+                f"openclaw:{self.agent_id}",
+            })
+
+        return expected
 
     async def health_check(self) -> dict:
         """
@@ -79,6 +105,7 @@ class OpenClawClient:
         result = {
             "gateway_url": self.base_url,
             "agent_id": self.agent_id,
+            "chat_model": self.chat_model,
             "gateway_reachable": False,
             "api_responding": False,
             "error": None,
@@ -109,16 +136,14 @@ class OpenClawClient:
                             for model in data.get("data", [])
                             if isinstance(model, dict)
                         }
-                        expected = {
-                            f"openclaw/{self.agent_id}",
-                            f"openclaw:{self.agent_id}",
-                        }
+                        expected = self._expected_model_ids()
                         if model_ids.intersection(expected):
                             result["api_responding"] = True
                         else:
                             result["error"] = (
                                 f"Authenticated API responded, but agent "
-                                f"'{self.agent_id}' was not listed in /v1/models"
+                                f"or model target '{self.chat_model}' was not "
+                                f"listed in /v1/models"
                             )
                     else:
                         error_text = await resp.text()
@@ -180,7 +205,7 @@ class OpenClawClient:
             messages.extend(conversation_history)
 
         payload = {
-            "model": f"openclaw:{self.agent_id}",
+            "model": self.chat_model,
             "messages": messages,
             "stream": False,
         }

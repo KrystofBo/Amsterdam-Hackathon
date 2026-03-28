@@ -113,4 +113,11 @@ See `SETUP.md` for the full deployer guide including OpenClaw setup.
 | `OPENCLAW_URL` | No | `http://localhost:18789` | OpenClaw gateway URL |
 | `OPENCLAW_TOKEN` | Yes | — | Bearer token for OpenClaw API |
 | `OPENCLAW_AGENT_ID` | No | `synthesizer` | Which OpenClaw agent to route to |
+| `USE_OPENAI_API` | No | `false` | When `true`, `manage.sh` switches the synthesizer agent to OpenAI |
+| `OPENAI_API_KEY` | No | — | OpenAI API key used when `USE_OPENAI_API=true` |
+| `OPENAI_MODEL` | No | `gpt-4.1-mini` | OpenAI model name used when `USE_OPENAI_API=true` |
+| `OPENCLAW_CHAT_MODEL` | No | `openclaw:synthesizer` | Chat completion target sent by the bot |
+| `OPENCLAW_AGENT_MODEL_ALIAS` | No | `synthesizer-default` | Alias used for the agent's backing model |
+| `OPENCLAW_AGENT_MODEL` | No | — | Advanced override for the full backing model id |
+| `OPENCLAW_OPENAI_PROFILE_ID` | No | `openai:manual` | OpenClaw auth profile id for OpenAI |
 | `PROJECT_CATEGORY` | No | `PROJECTS` | Discord category name for project channels |

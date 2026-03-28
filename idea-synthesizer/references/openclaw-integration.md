@@ -76,6 +76,11 @@ Content-Type: application/json
 }
 ```
 
+The recommended production pattern is to keep the bot targeting the agent alias
+(`openclaw:synthesizer`) and switch the backing provider/model inside OpenClaw
+itself. That lets you move between `openai/...`, `google/...`, etc. without
+changing Python code.
+
 **Response:**
 ```json
 {

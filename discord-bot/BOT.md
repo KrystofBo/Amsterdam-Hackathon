@@ -121,6 +121,13 @@ discord-bot/
 | `OPENCLAW_URL` | No | `http://localhost:18789` | OpenClaw gateway URL |
 | `OPENCLAW_TOKEN` | Yes | — | Bearer token for OpenClaw API auth |
 | `OPENCLAW_AGENT_ID` | No | `synthesizer` | Which OpenClaw agent to route to |
+| `USE_OPENAI_API` | No | `false` | When `true`, `manage.sh` switches the synthesizer agent to OpenAI |
+| `OPENAI_API_KEY` | No | — | OpenAI API key used when `USE_OPENAI_API=true` |
+| `OPENAI_MODEL` | No | `gpt-4.1-mini` | OpenAI model name used when `USE_OPENAI_API=true` |
+| `OPENCLAW_CHAT_MODEL` | No | `openclaw:synthesizer` | Chat completion target sent to OpenClaw |
+| `OPENCLAW_AGENT_MODEL_ALIAS` | No | `synthesizer-default` | Alias name used for the agent's backing model |
+| `OPENCLAW_AGENT_MODEL` | No | — | Advanced override for the full backing model id |
+| `OPENCLAW_OPENAI_PROFILE_ID` | No | `openai:manual` | OpenClaw auth profile used for OpenAI |
 | `PROJECT_CATEGORY` | No | `PROJECTS` | Discord category name for project channels |
 
 ## Setup
@@ -136,6 +143,34 @@ pip install -r requirements.txt
 cp .env.example .env
 # Fill in DISCORD_TOKEN and OPENCLAW_TOKEN
 python bot.py
+```
+
+If you want the synthesizer agent to run on OpenAI using only `.env`, set:
+
+```env
+USE_OPENAI_API=true
+OPENAI_API_KEY=your_openai_key
+OPENAI_MODEL=gpt-4.1-mini
+```
+
+Then run:
+
+```bash
+./manage.sh run-bot
+```
+
+`manage.sh` will sync the API key into OpenClaw and apply the model alias before
+starting the bot.
+
+If you also start the gateway through `manage.sh run-openclaw`, it will use the
+same `.env` values. Plain `openclaw gateway run` does not read this file.
+
+Future model swaps are just:
+
+```bash
+# edit USE_OPENAI_API / OPENAI_API_KEY / OPENAI_MODEL in .env
+./manage.sh run-openclaw
+./manage.sh run-bot
 ```
 
 ## Key Design Decisions

@@ -24,6 +24,9 @@ Useful shortcuts:
 
 ```bash
 ./manage.sh setup-openclaw
+./manage.sh configure-openai-auth
+./manage.sh apply-model-config
+./manage.sh show-model
 ./manage.sh run-openclaw
 ./manage.sh run-openclaw-lan   # better fallback on WSL
 ./manage.sh show-token
@@ -71,6 +74,23 @@ Confirm the active config file and provider settings if needed:
 ```bash
 openclaw config file
 ```
+
+For this bot, the recommended pattern is:
+
+1. Keep the bot talking to the agent via `OPENCLAW_CHAT_MODEL=openclaw:synthesizer`
+2. Turn `USE_OPENAI_API=true` when you want the synthesizer agent to use OpenAI
+3. Set `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env`
+4. Run `./manage.sh run-bot`
+
+To store an OpenAI API key for the synthesizer agent:
+
+```bash
+cd discord-bot/
+./manage.sh configure-openai-auth
+```
+
+If `OPENAI_API_KEY` is set in `.env`, that same command will use the env value
+instead of prompting.
 
 ## Step 4: Start the OpenClaw Gateway
 
@@ -123,7 +143,40 @@ DISCORD_TOKEN=paste_your_discord_bot_token_here
 OPENCLAW_URL=http://localhost:18789
 OPENCLAW_TOKEN=paste_your_openclaw_api_token_here
 OPENCLAW_AGENT_ID=synthesizer
+USE_OPENAI_API=true
+OPENAI_API_KEY=paste_your_openai_api_key_here
+OPENAI_MODEL=gpt-4.1-mini
+OPENCLAW_CHAT_MODEL=openclaw:synthesizer
+OPENCLAW_AGENT_MODEL_ALIAS=synthesizer-default
+OPENCLAW_AGENT_MODEL=
+OPENCLAW_OPENAI_PROFILE_ID=openai:manual
 PROJECT_CATEGORY=PROJECTS
+```
+
+If you use `manage.sh run-bot`, it will automatically:
+
+1. check `USE_OPENAI_API`
+2. sync `OPENAI_API_KEY` from `.env` into OpenClaw
+3. point the synthesizer alias at `openai/$OPENAI_MODEL`
+4. start the bot
+
+If you use `manage.sh run-openclaw` or `manage.sh run-openclaw-lan`, it will do
+the same sync/apply steps before starting the gateway. This matters because
+plain `openclaw gateway run` does not read the bot's `.env` file.
+
+You can also apply the selected backing model manually:
+
+```bash
+./manage.sh apply-model-config
+./manage.sh show-model
+```
+
+From then on, switching models is just:
+
+```bash
+# edit USE_OPENAI_API / OPENAI_API_KEY / OPENAI_MODEL in .env
+./manage.sh run-openclaw
+./manage.sh run-bot
 ```
 
 To find your OpenClaw API token:

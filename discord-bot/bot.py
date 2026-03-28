@@ -32,6 +32,7 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 OPENCLAW_URL = os.getenv("OPENCLAW_URL", "http://localhost:18789")
 OPENCLAW_TOKEN = os.getenv("OPENCLAW_TOKEN", "")
 OPENCLAW_AGENT_ID = os.getenv("OPENCLAW_AGENT_ID", "synthesizer")
+OPENCLAW_CHAT_MODEL = os.getenv("OPENCLAW_CHAT_MODEL", f"openclaw:{OPENCLAW_AGENT_ID}")
 
 # Category name where project channels are created
 PROJECT_CATEGORY = os.getenv("PROJECT_CATEGORY", "PROJECTS")
@@ -46,7 +47,12 @@ bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 # Core components
 store = TeamStore()
-openclaw = OpenClawClient(OPENCLAW_URL, OPENCLAW_TOKEN, OPENCLAW_AGENT_ID)
+openclaw = OpenClawClient(
+    OPENCLAW_URL,
+    OPENCLAW_TOKEN,
+    OPENCLAW_AGENT_ID,
+    chat_model=OPENCLAW_CHAT_MODEL,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -283,6 +289,7 @@ async def on_ready():
     print(f"Idea Synthesizer Bot is online as {bot.user}")
     print(f"Connected to OpenClaw at {OPENCLAW_URL}")
     print(f"Using agent: {OPENCLAW_AGENT_ID}")
+    print(f"Using chat model target: {OPENCLAW_CHAT_MODEL}")
 
     # Auto-setup lobby in every server the bot is in
     for guild in bot.guilds:
