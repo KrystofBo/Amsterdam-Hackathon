@@ -9,6 +9,7 @@ Commands:
   !projects           — List all active projects across channels
   !status             — Show how many dumps, who contributed, synthesis state
   !clear              — Wipe all dumps and conversation history for this channel
+  !lobby              — Post the lobby welcome panel (create/join projects)
   !help               — Show available commands
 """
 
@@ -16,6 +17,7 @@ import os
 import sys
 import discord
 from discord.ext import commands
+from discord import ui
 from dotenv import load_dotenv
 
 # Unbuffer stdout so print() shows immediately in terminal
@@ -31,6 +33,9 @@ OPENCLAW_URL = os.getenv("OPENCLAW_URL", "http://localhost:18789")
 OPENCLAW_TOKEN = os.getenv("OPENCLAW_TOKEN", "")
 OPENCLAW_AGENT_ID = os.getenv("OPENCLAW_AGENT_ID", "synthesizer")
 
+# Category name where project channels are created
+PROJECT_CATEGORY = os.getenv("PROJECT_CATEGORY", "PROJECTS")
+
 # Discord bot setup
 intents = discord.Intents.default()
 intents.message_content = True
@@ -39,6 +44,142 @@ bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 # Core components
 store = TeamStore()
 openclaw = OpenClawClient(OPENCLAW_URL, OPENCLAW_TOKEN, OPENCLAW_AGENT_ID)
+
+
+# ---------------------------------------------------------------------------
+# Lobby UI: Create / Join project
+# ---------------------------------------------------------------------------
+
+class CreateProjectModal(ui.Modal, title="Create a New Project"):
+    project_name = ui.TextInput(
+        label="Project Name",
+        placeholder="e.g. NASA Edu Game",
+        min_length=2,
+        max_length=50,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        name = self.project_name.value.strip()
+        guild = interaction.guild
+
+        # Find or create the PROJECTS category
+        category = discord.utils.get(guild.categories, name=PROJECT_CATEGORY)
+        if category is None:
+            category = await guild.create_category(PROJECT_CATEGORY)
+
+        # Create a text channel under the category
+        channel_name = name.lower().replace(" ", "-")
+        channel = await guild.create_text_channel(channel_name, category=category)
+
+        # Register the project
+        store.set_project_name(channel.id, name, channel_name=channel.name)
+
+        # Post a welcome message in the new channel
+        welcome = discord.Embed(
+            title=f"Project: {name}",
+            description=(
+                f"Welcome to **{name}**! This is your team's brainstorming space.\n\n"
+                "Get started by dumping your ideas:\n"
+                "`!dump <your idea>`\n\n"
+                "When everyone's ready, run `!synthesize` to fuse them into a scored pitch."
+            ),
+            color=0x2ECC71,
+        )
+        await channel.send(embed=welcome)
+
+        await interaction.response.send_message(
+            f"Project **{name}** created! Head over to {channel.mention}",
+            ephemeral=True,
+        )
+
+
+class JoinProjectSelect(ui.Select):
+    def __init__(self, options_list):
+        super().__init__(
+            placeholder="Choose a project to join...",
+            options=options_list,
+            min_values=1,
+            max_values=1,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        channel_id = int(self.values[0])
+        channel = interaction.guild.get_channel(channel_id)
+        if channel is None:
+            await interaction.response.send_message(
+                "That channel no longer exists.", ephemeral=True
+            )
+            return
+
+        # Grant the user access if the channel has restricted permissions
+        await channel.set_permissions(interaction.user, read_messages=True, send_messages=True)
+
+        await interaction.response.send_message(
+            f"You've joined **{store.get_project_name(channel_id)}**! "
+            f"Head over to {channel.mention}",
+            ephemeral=True,
+        )
+
+
+class JoinProjectView(ui.View):
+    def __init__(self, options_list):
+        super().__init__(timeout=None)
+        self.add_item(JoinProjectSelect(options_list))
+
+
+class LobbyView(ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @ui.button(label="Create Project", style=discord.ButtonStyle.green, emoji="\u2795", custom_id="lobby:create")
+    async def create_project(self, interaction: discord.Interaction, button: ui.Button):
+        await interaction.response.send_modal(CreateProjectModal())
+
+    @ui.button(label="Join Project", style=discord.ButtonStyle.blurple, emoji="\U0001f4c2", custom_id="lobby:join")
+    async def join_project(self, interaction: discord.Interaction, button: ui.Button):
+        # Build list of active project channels
+        all_projects = store.all_projects()
+
+        # Also scan the PROJECTS category for channels not yet in the store
+        guild = interaction.guild
+        category = discord.utils.get(guild.categories, name=PROJECT_CATEGORY)
+        if category:
+            for ch in category.text_channels:
+                if not any(p["channel_id"] == ch.id for p in all_projects):
+                    all_projects.append({
+                        "channel_id": ch.id,
+                        "channel_name": ch.name,
+                        "project_name": ch.name.replace("-", " ").title(),
+                        "total_dumps": 0,
+                        "contributors": [],
+                        "has_synthesis": False,
+                        "feedback_rounds": 0,
+                    })
+
+        if not all_projects:
+            await interaction.response.send_message(
+                "No projects yet! Click **Create Project** to start one.",
+                ephemeral=True,
+            )
+            return
+
+        options = []
+        for p in all_projects[:25]:  # Discord max 25 select options
+            status_text = f"{p['total_dumps']} ideas"
+            if p["contributors"]:
+                status_text += f" from {', '.join(p['contributors'][:3])}"
+            options.append(discord.SelectOption(
+                label=p["project_name"][:100],
+                value=str(p["channel_id"]),
+                description=status_text[:100],
+            ))
+
+        view = JoinProjectView(options)
+        await interaction.response.send_message(
+            "Select a project to join:",
+            view=view,
+            ephemeral=True,
+        )
 
 # Discord has a 2000-char message limit — split long responses
 MAX_MSG_LEN = 1900
@@ -64,9 +205,28 @@ def split_message(text: str) -> list[str]:
 
 @bot.event
 async def on_ready():
+    # Register the lobby view so buttons survive bot restarts
+    bot.add_view(LobbyView())
     print(f"Idea Synthesizer Bot is online as {bot.user}")
     print(f"Connected to OpenClaw at {OPENCLAW_URL}")
     print(f"Using agent: {OPENCLAW_AGENT_ID}")
+
+
+@bot.command(name="lobby")
+async def lobby(ctx):
+    """Post the lobby panel with Create/Join project buttons."""
+    embed = discord.Embed(
+        title="Idea Synthesizer",
+        description=(
+            "Welcome! This is where hackathon teams turn chaotic ideas "
+            "into focused, scored project pitches.\n\n"
+            "**Create a Project** — Start a new brainstorming channel for your team\n"
+            "**Join a Project** — Jump into an existing project"
+        ),
+        color=0x7289DA,
+    )
+    embed.set_footer(text="Each project gets its own channel. Ideas stay isolated.")
+    await ctx.send(embed=embed, view=LobbyView())
 
 
 @bot.command(name="help")
@@ -84,6 +244,7 @@ async def help_cmd(ctx):
     embed.add_field(name="!projects", value="List all active projects across channels", inline=False)
     embed.add_field(name="!status", value="See who's contributed and current state", inline=False)
     embed.add_field(name="!clear", value="Wipe all ideas and start fresh", inline=False)
+    embed.add_field(name="!lobby", value="Post the lobby panel (create/join projects)", inline=False)
     await ctx.send(embed=embed)
 
 
