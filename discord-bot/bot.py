@@ -247,8 +247,8 @@ def make_score_bar(score: int, max_score: int, length: int = 10) -> str:
     """Create a visual progress bar for a score."""
     filled = round(score / max_score * length)
     empty = length - filled
-    bar = "▓" * filled + "░" * empty
-    return bar
+    bar = "■" * filled + "·" * empty
+    return f"[{bar}]"
 
 
 def make_evaluation_embed(data: dict) -> discord.Embed:
@@ -273,15 +273,6 @@ def make_evaluation_embed(data: dict) -> discord.Embed:
     embed.add_field(
         name=f"Technical Difficulty  {d_score}/{d_max}",
         value=f"`{make_score_bar(d_score, d_max)}`\n{d.get('reasoning', '')}",
-        inline=False,
-    )
-
-    # Inclusivity
-    i = data.get("inclusivity", {})
-    i_score, i_max = i.get("score", 0), i.get("max", 100)
-    embed.add_field(
-        name=f"Inclusivity  {i_score}%",
-        value=f"`{make_score_bar(i_score, i_max)}`\n{i.get('reasoning', '')}",
         inline=False,
     )
 
