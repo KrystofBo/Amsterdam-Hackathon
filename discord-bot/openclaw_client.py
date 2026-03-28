@@ -91,24 +91,35 @@ class OpenClawClient:
                 async with session.get(self.base_url) as resp:
                     result["gateway_reachable"] = True
 
-                # Check if the chat completions endpoint responds
+                # Check if the authenticated OpenAI-compatible API responds.
+                # `/v1/models` is much faster and cheaper than creating a real
+                # completion, while still verifying auth and agent visibility.
                 headers = {
                     "Authorization": f"Bearer {self.token}",
                     "Content-Type": "application/json",
                 }
-                payload = {
-                    "model": f"openclaw:{self.agent_id}",
-                    "messages": [{"role": "user", "content": "ping"}],
-                    "max_tokens": 5,
-                    "stream": False,
-                }
-                async with session.post(
-                    f"{self.base_url}/v1/chat/completions",
-                    json=payload,
+                async with session.get(
+                    f"{self.base_url}/v1/models",
                     headers=headers,
                 ) as resp:
                     if resp.status == 200:
-                        result["api_responding"] = True
+                        data = await resp.json()
+                        model_ids = {
+                            model.get("id", "")
+                            for model in data.get("data", [])
+                            if isinstance(model, dict)
+                        }
+                        expected = {
+                            f"openclaw/{self.agent_id}",
+                            f"openclaw:{self.agent_id}",
+                        }
+                        if model_ids.intersection(expected):
+                            result["api_responding"] = True
+                        else:
+                            result["error"] = (
+                                f"Authenticated API responded, but agent "
+                                f"'{self.agent_id}' was not listed in /v1/models"
+                            )
                     else:
                         error_text = await resp.text()
                         result["error"] = f"API returned {resp.status}: {error_text[:200]}"

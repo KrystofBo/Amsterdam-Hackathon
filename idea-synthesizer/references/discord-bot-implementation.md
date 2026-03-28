@@ -54,7 +54,7 @@ Buttons use `custom_id` and are re-registered on bot startup via `bot.add_view(L
 `!health` pings the OpenClaw gateway with a 5-second timeout:
 
 1. Checks if the gateway URL is reachable (GET request)
-2. Sends a minimal chat completion request to verify the agent responds
+2. Calls authenticated `GET /v1/models` to verify the configured agent is exposed
 3. Returns a green embed if all good, or a red embed with specific troubleshooting tips
 
 The `OpenClawClient.health_check()` method returns a dict with `gateway_reachable`, `api_responding`, and `error` fields.

@@ -151,6 +151,6 @@ User messages also include a `[Project: name]` prefix for additional clarity.
 The `OpenClawClient.health_check()` method verifies connectivity:
 
 1. **Gateway reachable** — GET request to the base URL (5s timeout)
-2. **API responding** — Sends a minimal `POST /v1/chat/completions` with `max_tokens: 5`
+2. **API responding** — Sends an authenticated `GET /v1/models` and confirms the target agent is listed
 
 Returns a dict with `gateway_reachable`, `api_responding`, and `error` fields. Used by the `!health` Discord command.

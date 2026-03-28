@@ -11,6 +11,26 @@ Discord Users  ──→  Discord Bot  ──→  OpenClaw Gateway  ──→  L
 
 You host both the Discord bot and OpenClaw on the same machine. Everyone else just uses Discord.
 
+## Script Shortcut
+
+If you want the common commands in one place, use:
+
+```bash
+cd discord-bot/
+./manage.sh help
+```
+
+Useful shortcuts:
+
+```bash
+./manage.sh setup-openclaw
+./manage.sh run-openclaw
+./manage.sh run-openclaw-lan   # better fallback on WSL
+./manage.sh show-token
+./manage.sh install-bot-deps
+./manage.sh run-bot
+```
+
 ## Prerequisites
 
 - Python 3.9+ with conda
@@ -29,30 +49,34 @@ This installs OpenClaw and registers it as a background service. Default install
 ## Step 2: Create the Synthesizer Agent
 
 ```bash
-openclaw agents add synthesizer
+openclaw agents add synthesizer \
+  --workspace ~/.openclaw/workspace-synthesizer \
+  --non-interactive \
+  --json
 ```
 
 This creates a new agent called "synthesizer" with its own workspace and config.
 
 ## Step 3: Configure the LLM Provider
 
-OpenClaw needs an LLM to do the actual synthesis. Configure it with your API key:
+Recent OpenClaw versions handle provider auth during onboarding and store it in
+the main OpenClaw config. If you have not already connected a provider, rerun:
 
 ```bash
-# For Anthropic Claude:
-openclaw agents auth synthesizer --provider anthropic --api-key YOUR_ANTHROPIC_KEY
-
-# For OpenAI:
-openclaw agents auth synthesizer --provider openai --api-key YOUR_OPENAI_KEY
+openclaw onboard
 ```
 
-Alternatively, edit the auth profile directly:
-`~/.openclaw/agents/synthesizer/agent/auth-profiles.json`
+Confirm the active config file and provider settings if needed:
+
+```bash
+openclaw config file
+```
 
 ## Step 4: Start the OpenClaw Gateway
 
 ```bash
-openclaw gateway --port 18789 --verbose
+openclaw config set gateway.http.endpoints.chatCompletions.enabled true --strict-json
+openclaw gateway run --port 18789 --verbose
 ```
 
 Leave this running in a terminal (or it runs as a daemon if you used `--install-daemon`).
@@ -61,6 +85,11 @@ Verify it's up:
 ```bash
 curl http://localhost:18789
 ```
+
+If you're on WSL and `systemd --user` is unavailable, run the gateway in the
+foreground instead of relying on the service manager. If `loopback` bind fails
+in your environment, use `openclaw gateway run --bind lan --port 18789 --verbose`
+and restrict access to your local machine/network.
 
 ## Step 5: Set Up the Discord Bot
 
@@ -99,7 +128,7 @@ PROJECT_CATEGORY=PROJECTS
 
 To find your OpenClaw API token:
 ```bash
-openclaw config get api-token
+openclaw config get gateway.auth.token
 ```
 
 ### Install Dependencies and Run
@@ -126,15 +155,15 @@ If you see red, check the troubleshooting tips in the embed.
 ## Troubleshooting
 
 ### "Cannot connect to OpenClaw"
-- Is the gateway running? `openclaw gateway --port 18789 --verbose`
+- Is the gateway running? `openclaw gateway run --port 18789 --verbose`
 - Is the URL correct in `.env`? Default is `http://localhost:18789`
 
 ### "API returned 401"
 - Wrong or missing `OPENCLAW_TOKEN` in `.env`
-- Get the correct token: `openclaw config get api-token`
+- Get the correct token: `openclaw config get gateway.auth.token`
 
 ### "API returned 404" or agent not found
-- Agent doesn't exist. Create it: `openclaw agents add synthesizer`
+- Agent doesn't exist. Create it: `openclaw agents add synthesizer --workspace ~/.openclaw/workspace-synthesizer --non-interactive --json`
 - Check existing agents: `openclaw agents list`
 
 ### "Missing Permissions" when creating projects
