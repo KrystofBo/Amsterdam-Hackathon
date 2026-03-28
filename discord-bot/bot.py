@@ -36,6 +36,9 @@ OPENCLAW_AGENT_ID = os.getenv("OPENCLAW_AGENT_ID", "synthesizer")
 # Category name where project channels are created
 PROJECT_CATEGORY = os.getenv("PROJECT_CATEGORY", "PROJECTS")
 
+# Lobby channel name
+LOBBY_CHANNEL = os.getenv("LOBBY_CHANNEL", "lobby")
+
 # Discord bot setup
 intents = discord.Intents.default()
 intents.message_content = True
@@ -203,6 +206,76 @@ def split_message(text: str) -> list[str]:
     return chunks
 
 
+def make_lobby_embed() -> discord.Embed:
+    """Build the lobby welcome embed (reused by on_ready and !lobby)."""
+    embed = discord.Embed(
+        title="Idea Synthesizer",
+        description=(
+            "Welcome! This is where hackathon teams turn chaotic ideas "
+            "into focused, scored project pitches.\n\n"
+            "**Create a Project** — Start a new brainstorming channel for your team\n"
+            "**Join a Project** — Jump into an existing project\n\n"
+            "Each project gets its own private channel. Your ideas stay isolated."
+        ),
+        color=0x7289DA,
+    )
+    embed.set_footer(text="Powered by OpenClaw")
+    return embed
+
+
+async def setup_lobby(guild: discord.Guild):
+    """Find or create the #lobby channel, clear it, and post a fresh lobby embed."""
+    # Find existing lobby channel
+    channel = discord.utils.get(guild.text_channels, name=LOBBY_CHANNEL)
+
+    if channel is None:
+        # Create lobby channel at the top of the server
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(
+                send_messages=False,       # nobody can type
+                read_messages=True,        # everyone can see
+                read_message_history=True,
+            ),
+            guild.me: discord.PermissionOverwrite(
+                send_messages=True,        # bot can post
+                manage_messages=True,      # bot can clean up
+                read_messages=True,
+            ),
+        }
+        channel = await guild.create_text_channel(
+            LOBBY_CHANNEL,
+            overwrites=overwrites,
+            position=0,
+            topic="Create or join a project to start brainstorming with your team.",
+        )
+        print(f"  Created #{LOBBY_CHANNEL} channel")
+    else:
+        # Lock existing channel — make sure only bot can send
+        await channel.set_permissions(
+            guild.default_role,
+            send_messages=False,
+            read_messages=True,
+            read_message_history=True,
+        )
+        await channel.set_permissions(
+            guild.me,
+            send_messages=True,
+            manage_messages=True,
+            read_messages=True,
+        )
+
+    # Clear all existing messages so the channel is pristine
+    try:
+        await channel.purge(limit=100)
+    except discord.Forbidden:
+        # If we can't purge, just post on top of what's there
+        pass
+
+    # Post the lobby embed
+    await channel.send(embed=make_lobby_embed(), view=LobbyView())
+    print(f"  Lobby posted in #{channel.name}")
+
+
 @bot.event
 async def on_ready():
     # Register the lobby view so buttons survive bot restarts
@@ -211,22 +284,22 @@ async def on_ready():
     print(f"Connected to OpenClaw at {OPENCLAW_URL}")
     print(f"Using agent: {OPENCLAW_AGENT_ID}")
 
+    # Auto-setup lobby in every server the bot is in
+    for guild in bot.guilds:
+        print(f"  Setting up lobby in: {guild.name}")
+        try:
+            await setup_lobby(guild)
+        except discord.Forbidden:
+            print(f"  WARNING: Missing permissions to set up lobby in {guild.name}")
+        except Exception as e:
+            print(f"  ERROR setting up lobby in {guild.name}: {e}")
+
 
 @bot.command(name="lobby")
 async def lobby(ctx):
-    """Post the lobby panel with Create/Join project buttons."""
-    embed = discord.Embed(
-        title="Idea Synthesizer",
-        description=(
-            "Welcome! This is where hackathon teams turn chaotic ideas "
-            "into focused, scored project pitches.\n\n"
-            "**Create a Project** — Start a new brainstorming channel for your team\n"
-            "**Join a Project** — Jump into an existing project"
-        ),
-        color=0x7289DA,
-    )
-    embed.set_footer(text="Each project gets its own channel. Ideas stay isolated.")
-    await ctx.send(embed=embed, view=LobbyView())
+    """Re-post the lobby panel (useful if it was accidentally deleted)."""
+    await ctx.message.delete()  # clean up the command message
+    await ctx.send(embed=make_lobby_embed(), view=LobbyView())
 
 
 @bot.command(name="help")
